@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ritsika}
+      POSTGRES_USER: ${POSTGRES_USER:-ritsika}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ritsika} -d ${POSTGRES_DB:-ritsika}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [private]
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [private]
+  api:
+    build: ./backend
+    env_file: .env
+    ports: ["8000:8000"]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [private]
+  storefront:
+    build: ./apps/storefront
+    ports: ["5173:5173"]
+    environment: {VITE_API_BASE_URL: http://localhost:8000/api/v1}
+    depends_on: [api]
+  admin:
+    build: ./apps/admin
+    ports: ["5174:5173"]
+    environment: {VITE_API_BASE_URL: http://localhost:8000/api/v1}
+    depends_on: [api]
+  seller:
+    build: ./apps/seller
+    ports: ["5175:5173"]
+    environment: {VITE_API_BASE_URL: http://localhost:8000/api/v1}
+    depends_on: [api]
+volumes:
+  postgres_data:
+  redis_data:
+networks:
+  private:
+    driver: bridge
